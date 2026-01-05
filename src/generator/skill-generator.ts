@@ -121,6 +121,16 @@ async function generateServerSkills(
 }
 
 /**
+ * Sanitize text for use in JSDoc comments
+ * Escapes patterns that would break JSDoc: asterisk-slash, etc.
+ */
+function sanitizeForJSDoc(text: string): string {
+  return text
+    .replace(/\*\//g, '*\u200B/')  // Zero-width space to break */
+    .replace(/\/\*/g, '/\u200B*'); // Zero-width space to break /*
+}
+
+/**
  * Generate a single skill file
  */
 function generateSkillFile(
@@ -130,6 +140,9 @@ function generateSkillFile(
   const funcName = toCamelCase(tool.name);
   const inputTypeName = `${toPascalCase(tool.name)}Input`;
   const resultTypeName = `${toPascalCase(tool.name)}Result`;
+  
+  // Sanitize description for JSDoc
+  const safeDescription = tool.description ? sanitizeForJSDoc(tool.description) : undefined;
 
   const lines: string[] = [];
 
@@ -140,10 +153,10 @@ function generateSkillFile(
   lines.push(` *`);
   lines.push(` * Skill: ${tool.name}`);
   lines.push(` * Server: ${serverName}`);
-  if (tool.description) {
+  if (safeDescription) {
     lines.push(` *`);
     // Format multi-line descriptions properly
-    const descLines = tool.description.split('\n');
+    const descLines = safeDescription.split('\n');
     for (const line of descLines) {
       lines.push(` * ${line}`);
     }
@@ -194,8 +207,8 @@ function generateSkillFile(
 
   // Generate the skill function with enhanced JSDoc
   lines.push(`/**`);
-  if (tool.description) {
-    const descLines = tool.description.split('\n');
+  if (safeDescription) {
+    const descLines = safeDescription.split('\n');
     for (const line of descLines) {
       lines.push(` * ${line}`);
     }
@@ -255,8 +268,9 @@ function generateServerIndex(tools: ToolDefinition[], serverName: string): strin
   lines.push(` * ## Available Skills`);
   lines.push(` *`);
   for (const tool of tools) {
-    const shortDesc = tool.description?.split('\n')[0]?.substring(0, 60) || 'No description';
-    lines.push(` * - {@link ${toCamelCase(tool.name)}} - ${shortDesc}${shortDesc.length >= 60 ? '...' : ''}`);
+    const rawDesc = tool.description?.split('\n')[0]?.substring(0, 60) || 'No description';
+    const shortDesc = sanitizeForJSDoc(rawDesc);
+    lines.push(` * - {@link ${toCamelCase(tool.name)}} - ${shortDesc}${rawDesc.length >= 60 ? '...' : ''}`);
   }
   lines.push(` *`);
   lines.push(` * @example`);
