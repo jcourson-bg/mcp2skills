@@ -229,7 +229,7 @@ function generateSkillFile(
   lines.push(`  input: ${inputTypeName},`);
   lines.push(`  context: SkillContext`);
   lines.push(`): Promise<${resultTypeName}> => {`);
-  lines.push(`  return context.callTool("${tool.name}", input as Record<string, unknown>);`);
+  lines.push(`  return context.callTool("${tool.name}", input as unknown as Record<string, unknown>);`);
   lines.push(`});`);
   lines.push(``);
 
