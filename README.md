@@ -1,39 +1,62 @@
-# MCP to Skills Converter
+# mcp2skills
 
-Convert MCP (Model Context Protocol) servers into reusable chatbot skills with automatic code generation and runtime auth handling.
+Production-level CLI tool for converting MCP (Model Context Protocol) servers into reusable chatbot skills with automatic code generation and runtime authentication handling.
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org/)
+[![MCP](https://img.shields.io/badge/MCP-1.25-purple.svg)](https://modelcontextprotocol.io/)
 
 ## Features
 
-- **MCP Client with Auth**: Connect to MCP servers with support for:
+- **Multi-Transport MCP Client**: Connect to MCP servers via:
+  - `stdio` - Local process-based servers
+  - `sse` - Legacy HTTP+SSE servers
+  - `http` - Modern Streamable HTTP servers (recommended)
+
+- **Comprehensive Authentication**: 
   - No authentication
-  - API Key authentication
-  - Bearer token authentication
+  - API Key (custom headers)
+  - Bearer token
   - OAuth 2.0 (client credentials flow)
-  
-- **Tool Discovery**: Automatically discover and load tool definitions from MCP servers
 
-- **Multiple Transports**: Support for stdio and SSE transports
+- **Tool Discovery**: Automatically discover and inspect tools from any MCP server
 
-- **Code Generation**: Generate standalone Python skill modules from MCP tool definitions
+- **TypeScript Code Generation**: Generate strongly-typed skill modules with:
+  - Input/output interfaces from JSON Schema
+  - Full JSDoc documentation
+  - Skill metadata for discovery
+  - Runtime context integration
 
-- **Runtime Auth Manager**: Handle authentication when chatbots execute skills at runtime
+- **Runtime Auth Manager**: Multi-user session management for chatbot integration
 
 ## Installation
 
 ```bash
-# Using uv (recommended)
-uv venv && source .venv/bin/activate
-uv pip install -e ".[dev]"
+# Clone and install
+npm install
 
-# Or using pip
-pip install -e ".[dev]"
+# Build
+npm run build
+
+# Run CLI
+node dist/cli.js --help
+```
+
+Or install globally:
+
+```bash
+npm install -g mcp2skills
 ```
 
 ## Quick Start
 
-### 1. Configure MCP Servers
+### 1. Create Configuration
 
-Create a `mcp-servers.json` file:
+```bash
+mcp2skills init
+```
+
+This creates a `mcp-servers.json` file:
 
 ```json
 {
@@ -44,7 +67,7 @@ Create a `mcp-servers.json` file:
       "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
     },
     "my-api": {
-      "transport": "sse",
+      "transport": "http",
       "url": "https://api.example.com/mcp",
       "auth_type": "bearer",
       "auth_config": {
@@ -58,115 +81,232 @@ Create a `mcp-servers.json` file:
 ### 2. Test Connection
 
 ```bash
+# Test stdio-based server
 mcp2skills connect "npx" --args "-y,@modelcontextprotocol/server-filesystem,/tmp"
+
+# Test HTTP/SSE server with auth
+mcp2skills connect-sse "https://api.example.com/mcp" --auth bearer --token "your-token"
 ```
 
-### 3. Generate Skills
+### 3. Discover Tools
 
 ```bash
-# Preview generated code
-mcp2skills generate mcp-servers.json --preview
+# List all tools
+mcp2skills list-tools -c mcp-servers.json
 
-# Generate skill files
-mcp2skills generate mcp-servers.json --output generated_skills
+# List in different formats
+mcp2skills list-tools -c mcp-servers.json --format json
+mcp2skills list-tools -c mcp-servers.json --format tree
+
+# Inspect a specific tool
+mcp2skills inspect mcp-servers.json read_file --server filesystem
 ```
 
-### 4. Use in Your Chatbot
+### 4. Generate Skills
 
-```python
-import asyncio
-from generated_skills import RuntimeAuthManager, list_skills
-from generated_skills.Canva import search_designs
+```bash
+# Generate all skills
+mcp2skills generate mcp-servers.json -o generated_skills
 
-# Create auth manager for multi-user sessions
-auth_manager = RuntimeAuthManager()
+# Generate for specific server
+mcp2skills generate mcp-servers.json -o my_skills --server filesystem
 
-# Add server configurations
-from generated_skills.runtime import MCPServerConfig
-auth_manager.add_server_config(MCPServerConfig(
-    name="Canva",
-    transport="sse",
-    url="https://mcp.canva.com",
-    auth_type="bearer",
-    auth_config={"env_var": "CANVA_TOKEN"}
-))
+# Preview without writing files
+mcp2skills generate mcp-servers.json --preview
+```
 
-async def handle_chat(user_id: str, message: str):
-    # Get or create user session
-    ctx = auth_manager.get_or_create_session(user_id)
-    
-    # Execute skill
-    result = await ctx.execute_skill(
-        "search-designs",
-        {"query": "presentation", "ownership": "owned"}
-    )
-    return result
+### 5. Use Generated Skills
 
-# Run
-asyncio.run(handle_chat("user-123", "Find my presentations"))
+```typescript
+import { RuntimeAuthManager, filesystem } from "./generated_skills/index.js";
+
+// Create auth manager
+const authManager = new RuntimeAuthManager();
+
+// Add server configuration
+authManager.addServerConfig({
+  name: "filesystem",
+  transport: "stdio",
+  command: "npx",
+  args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+});
+
+// Get session context for a user
+const context = authManager.getOrCreateSession("user-123", "filesystem");
+
+// Execute skills
+const result = await filesystem.readFile({ path: "/tmp/example.txt" }, context);
+
+if (result.success) {
+  console.log("File content:", result.data);
+} else {
+  console.error("Error:", result.error);
+}
+
+// Cleanup
+await authManager.shutdown();
 ```
 
 ## CLI Commands
 
-### List Tools
+### `mcp2skills init`
+
+Create a sample configuration file.
 
 ```bash
-# List all tools from configured servers
-mcp2skills list-tools --config mcp-servers.json
-
-# List tools in JSON format
-mcp2skills list-tools --config mcp-servers.json --format json
-
-# List tools in tree format
-mcp2skills list-tools --config mcp-servers.json --format tree
+mcp2skills init [-o, --output <path>]
 ```
 
-### Test Connections
+### `mcp2skills connect`
+
+Test connection to a stdio-based MCP server.
 
 ```bash
-# Test stdio-based server
-mcp2skills connect "npx" --args "-y,@modelcontextprotocol/server-filesystem,/tmp"
+mcp2skills connect <command> [options]
 
-# Test SSE-based server with auth
-mcp2skills connect-sse "https://api.example.com/mcp" --auth bearer --token "your-token"
+Options:
+  -a, --args <args>     Comma-separated arguments
+  -e, --env <vars...>   Environment variables (KEY=VALUE)
 ```
 
-### Inspect Tools
+### `mcp2skills connect-sse`
+
+Test connection to an SSE/HTTP-based MCP server.
 
 ```bash
-mcp2skills inspect mcp-servers.json read_file --server filesystem
+mcp2skills connect-sse <url> [options]
+
+Options:
+  --auth <type>         Authentication type (none, bearer, api_key)
+  --token <token>       Bearer token or API key
+  --env-var <name>      Environment variable containing the token
 ```
 
-### Export Definitions
+### `mcp2skills list-tools`
+
+List all tools from configured MCP servers.
 
 ```bash
-mcp2skills export mcp-servers.json --output tools.json
+mcp2skills list-tools [options]
+
+Options:
+  -c, --config <path>   Path to config file (required)
+  -s, --server <name>   Only list tools from this server
+  -f, --format <type>   Output format (table, json, tree)
 ```
 
-### Generate Skills
+### `mcp2skills inspect`
+
+Inspect a specific tool's schema and details.
 
 ```bash
-# Preview generated code
-mcp2skills generate mcp-servers.json --preview
+mcp2skills inspect <config> <tool> [options]
 
-# Generate to specific directory
-mcp2skills generate mcp-servers.json --output my_skills
+Options:
+  -s, --server <name>   Server containing the tool
+```
 
-# Generate for specific server only
-mcp2skills generate mcp-servers.json --server Canva --output canva_skills
+### `mcp2skills export`
+
+Export all tool definitions to JSON.
+
+```bash
+mcp2skills export <config> [options]
+
+Options:
+  -o, --output <path>   Output file (default: mcp-tools.json)
+  -s, --server <name>   Only export from this server
+```
+
+### `mcp2skills generate`
+
+Generate skill files from MCP tool definitions.
+
+```bash
+mcp2skills generate <config> [options]
+
+Options:
+  -o, --output <dir>        Output directory (default: generated_skills)
+  -s, --server <name>       Only generate for this server
+  -t, --tools <names>       Comma-separated tool names
+  -p, --preview             Preview without writing files
+  --no-inline-runtime       Don't include inline runtime
+```
+
+## Configuration Reference
+
+### Server Configuration
+
+```json
+{
+  "mcpServers": {
+    "server-name": {
+      // Transport configuration (one of)
+    }
+  }
+}
+```
+
+### Stdio Transport
+
+For local process-based servers:
+
+```json
+{
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+  "env": {
+    "MY_VAR": "value"
+  },
+  "cwd": "/path/to/working/dir"
+}
+```
+
+### HTTP Transport
+
+For modern Streamable HTTP servers:
+
+```json
+{
+  "transport": "http",
+  "url": "https://api.example.com/mcp",
+  "auth_type": "bearer",
+  "auth_config": {
+    "token": "your-token"
+  }
+}
+```
+
+### SSE Transport (Legacy)
+
+For legacy HTTP+SSE servers:
+
+```json
+{
+  "transport": "sse",
+  "url": "https://api.example.com/mcp",
+  "auth_type": "api_key",
+  "auth_config": {
+    "env_var": "API_KEY",
+    "header_name": "X-API-Key"
+  }
+}
 ```
 
 ## Authentication Types
 
 ### No Auth
+
 ```json
 {
-  "transport": "stdio",
-  "command": "some-server"
+  "transport": "http",
+  "url": "https://public-api.example.com/mcp"
 }
 ```
 
 ### API Key
+
 ```json
 {
   "auth_type": "api_key",
@@ -178,7 +318,8 @@ mcp2skills generate mcp-servers.json --server Canva --output canva_skills
 }
 ```
 
-Or use environment variables:
+Or via environment variable:
+
 ```json
 {
   "auth_type": "api_key",
@@ -189,6 +330,7 @@ Or use environment variables:
 ```
 
 ### Bearer Token
+
 ```json
 {
   "auth_type": "bearer",
@@ -198,7 +340,19 @@ Or use environment variables:
 }
 ```
 
-### OAuth 2.0
+Or via environment variable:
+
+```json
+{
+  "auth_type": "bearer",
+  "auth_config": {
+    "env_var": "API_TOKEN"
+  }
+}
+```
+
+### OAuth 2.0 (Client Credentials)
+
 ```json
 {
   "auth_type": "oauth",
@@ -217,94 +371,99 @@ When you run `mcp2skills generate`, it creates:
 
 ```
 generated_skills/
-├── __init__.py              # Package with exports
-├── runtime.py               # Standalone runtime (auth, context, registry)
+├── index.ts              # Main exports and skill registry
+├── runtime.ts            # Standalone runtime (auth, context, registry)
 └── ServerName/
-    ├── __init__.py
-    ├── tool_one.py          # Generated skill
-    ├── tool_two.py
+    ├── index.ts          # Server-specific exports
+    ├── tool_one.ts       # Generated skill
+    ├── tool_two.ts       # Generated skill
     └── ...
 ```
 
 Each generated skill includes:
-- **Input model**: Pydantic model for type-safe parameters
-- **Output model**: Standardized result with success/error handling
-- **Skill function**: Async function decorated with `@skill`
-- **Full documentation**: Description from MCP tool definition
 
-## Runtime Auth for Chatbots
+- **Input interface**: Strongly-typed from JSON Schema
+- **Skill function**: Async function with proper typing
+- **Skill metadata**: Name, server, description for discovery
+- **JSDoc comments**: Full documentation
 
-The `RuntimeAuthManager` handles multi-user authentication:
+## Runtime Auth Manager
 
-```python
-from generated_skills import RuntimeAuthManager
-from generated_skills.runtime import AuthCredentials, MCPServerConfig
+For multi-user chatbot scenarios:
 
-# Initialize
-auth_manager = RuntimeAuthManager()
+```typescript
+import { RuntimeAuthManager } from "mcp2skills/runtime";
 
-# Add server config
-auth_manager.add_server_config(MCPServerConfig(
-    name="MyAPI",
-    transport="sse", 
-    url="https://api.example.com/mcp",
-    auth_type="oauth",
-    auth_config={
-        "client_id": "...",
-        "client_secret": "...",
-        "token_url": "https://auth.example.com/token"
-    }
-))
+const authManager = new RuntimeAuthManager();
 
-# Per-user authentication
-async def on_user_login(user_id: str, access_token: str):
-    await auth_manager.authenticate_session(
-        session_id=user_id,
-        server_name="MyAPI",
-        credentials=AuthCredentials(
-            auth_type="bearer",
-            access_token=access_token
-        )
-    )
+// Add server configurations
+authManager.addServerConfig({
+  name: "api",
+  transport: "http",
+  url: "https://api.example.com/mcp",
+  authType: "bearer"
+});
 
-# Execute skills for user
-async def handle_request(user_id: str, skill_name: str, params: dict):
-    return await auth_manager.execute_skill(user_id, skill_name, params)
+// Per-user authentication
+await authManager.authenticateSession("user-123", "api", {
+  authType: "bearer",
+  accessToken: "user-specific-token"
+});
 
-# Cleanup
-async def on_user_logout(user_id: str):
-    await auth_manager.close_session(user_id)
+// Execute skills for users
+const context = authManager.getOrCreateSession("user-123", "api");
+const result = await mySkill(input, context);
+
+// Check authentication
+if (!authManager.isAuthenticated("user-123", "api")) {
+  // Redirect to auth flow
+}
+
+// Cleanup on logout
+await authManager.closeSession("user-123");
+
+// Shutdown all connections
+await authManager.shutdown();
 ```
 
 ## Architecture
 
 ```
 src/
-├── __init__.py       # Package init
-├── models.py         # Data models (ToolDefinition, MCPServerConfig, etc.)
-├── auth.py           # Authentication providers (OAuth, API Key, Bearer)
-├── client.py         # MCP client for connecting to servers
-├── runtime.py        # Runtime context and skill registry
-├── generator.py      # Code generator for skills
-├── cli.py            # Command-line interface
-└── templates/
-    └── skill.py.jinja2  # Jinja2 template for skill generation
+├── cli.ts                # CLI entry point and commands
+├── index.ts              # Main package exports
+├── types.ts              # Core types and Zod schemas
+├── client/
+│   ├── auth.ts           # Authentication providers
+│   ├── config.ts         # Configuration loading
+│   ├── mcp-client.ts     # MCP client wrapper
+│   └── index.ts
+├── generator/
+│   ├── schema-to-ts.ts   # JSON Schema to TypeScript
+│   ├── skill-generator.ts # Code generation
+│   └── index.ts
+├── runtime/
+│   └── index.ts          # Runtime auth and execution
+└── utils/
+    └── logger.ts         # Logging utilities
 ```
 
 ## Development
 
 ```bash
-# Run tests
-pytest tests/ -v
+# Install dependencies
+npm install
 
-# Format code
-black src/ tests/
+# Build
+npm run build
 
-# Lint
-ruff check src/ tests/
+# Type check
+npm run typecheck
+
+# Run in development mode
+npm run dev -- --help
 ```
 
 ## License
 
 MIT
-# mcp2skills
