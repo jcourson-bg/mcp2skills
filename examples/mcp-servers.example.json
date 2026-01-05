@@ -1,0 +1,50 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+    },
+    "github": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      }
+    },
+    "postgres": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres", "postgresql://localhost/mydb"]
+    },
+    "remote-api": {
+      "transport": "http",
+      "url": "https://api.example.com/mcp",
+      "auth_type": "bearer",
+      "auth_config": {
+        "env_var": "API_TOKEN"
+      }
+    },
+    "internal-api": {
+      "transport": "http",
+      "url": "https://internal.example.com/mcp",
+      "auth_type": "api_key",
+      "auth_config": {
+        "env_var": "INTERNAL_API_KEY",
+        "header_name": "X-Internal-Key"
+      }
+    },
+    "oauth-api": {
+      "transport": "http",
+      "url": "https://protected.example.com/mcp",
+      "auth_type": "oauth",
+      "auth_config": {
+        "client_id": "my-client-id",
+        "client_secret": "my-client-secret",
+        "token_url": "https://auth.example.com/oauth/token",
+        "scopes": ["read", "write"]
+      }
+    }
+  }
+}
