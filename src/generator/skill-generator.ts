@@ -629,15 +629,27 @@ export function listSkills(registry: Record<string, readonly string[]>): string[
 }
 
 /**
+ * Escape a string for use in YAML (wrap in quotes if needed)
+ */
+function escapeYamlString(str: string): string {
+  // If string contains special YAML characters, wrap in double quotes and escape
+  if (/[:\n"'#\[\]{}|>&*!?@`]/.test(str)) {
+    return `"${str.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  }
+  return str;
+}
+
+/**
  * Generate SKILL.md file for a server
  */
 function generateServerSkillMd(serverName: string, tools: ToolDefinition[]): string {
   const toolList = tools.map(t => `- \`${t.name}\`: ${t.description || 'No description'}`).join('\n');
   const toolNames = tools.map(t => t.name).join(', ');
+  const description = `Generated MCP skills for ${serverName}. Provides ${tools.length} skill(s) for interacting with the ${serverName} MCP server. Use these skills when you need to work with ${toolNames}.`;
   
   return `---
 name: ${serverName.toLowerCase()}
-description: Generated MCP skills for ${serverName}. Provides ${tools.length} skill(s) for interacting with the ${serverName} MCP server. Use these skills when you need to: ${toolNames}.
+description: ${escapeYamlString(description)}
 license: Apache-2.0
 ---
 
