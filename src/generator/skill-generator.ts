@@ -157,7 +157,7 @@ function generateSkillFile(
   lines.push(` * const authManager = new RuntimeAuthManager();`);
   lines.push(` * const context = authManager.getOrCreateSession("user-id", "${serverName}");`);
   lines.push(` *`);
-  lines.push(` * const result = await ${funcName}({ /* params */ }, context);`);
+  lines.push(` * const result = await ${funcName}({ path: "/example" }, context);`);
   lines.push(` * if (result.success) {`);
   lines.push(` *   console.log(result.data);`);
   lines.push(` * }`);
@@ -265,7 +265,7 @@ function generateServerIndex(tools: ToolDefinition[], serverName: string): strin
   lines.push(` *`);
   lines.push(` * const authManager = new RuntimeAuthManager();`);
   lines.push(` * const context = authManager.getOrCreateSession("user-123", "${serverName}");`);
-  lines.push(` * const result = await ${toCamelCase(tools[0]?.name || 'mySkill')}({ /* params */ }, context);`);
+  lines.push(` * const result = await ${toCamelCase(tools[0]?.name || 'mySkill')}({}, context);`);
   lines.push(` * \`\`\``);
   lines.push(` *`);
   lines.push(` * @see {@link ./SKILL.md} for detailed documentation`);
@@ -657,7 +657,7 @@ authManager.addServerConfig({
 const context = authManager.getOrCreateSession("user-123", "${serverName}");
 
 // Execute skills
-const result = await ${toCamelCase(tools[0]?.name || 'mySkill')}({ /* params */ }, context);
+const result = await ${toCamelCase(tools[0]?.name || 'mySkill')}({}, context);
 
 if (result.success) {
   console.log("Result:", result.data);
