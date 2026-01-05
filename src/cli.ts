@@ -375,13 +375,15 @@ program
           }
         }
 
-        // Print usage instructions
+        // Print usage instructions based on generated servers
+        const serverDirs = [...new Set(files.map(f => f.path.split('/')[1]).filter(Boolean))];
+        const firstServer = serverDirs[0] || "my-server";
         logger.info(`\n${chalk.bold("Usage:")}`);
-        logger.info(`  import { RuntimeAuthManager } from "./${options.output}/index.js";`);
-        logger.info(`  import { filesystem } from "./${options.output}/index.js";`);
+        logger.info(`  Each server is a self-contained Agent Skill. Import from the skill directory:`);
+        logger.info(`\n  import { RuntimeAuthManager, readFile } from "./${options.output}/${firstServer}/index.js";`);
         logger.info(`\n  const authManager = new RuntimeAuthManager();`);
-        logger.info(`  const context = authManager.getOrCreateSession("user-123", "filesystem");`);
-        logger.info(`  const result = await filesystem.readFile({ path: "/tmp/test.txt" }, context);`);
+        logger.info(`  const context = authManager.getOrCreateSession("user-123", "${firstServer}");`);
+        logger.info(`  const result = await readFile({ path: "/tmp/test.txt" }, context);`);
       } catch (error) {
         spinner.fail("Generation failed");
         logger.error(error instanceof Error ? error.message : String(error));
